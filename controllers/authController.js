@@ -46,6 +46,7 @@ exports.login = catchAsync(async (req, res, next) => {
 });
 
 exports.protected = catchAsync(async (req, res, next) => {
+  console.log(req.user);
   res.status(200).json({
     success: true,
     message: "You are authorized.",
@@ -133,7 +134,8 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
 
 //get current user
 exports.getUserProfile = catchAsync(async (req, res, next) => {
-  const user = await Users.findById(req.user.id);
+  console.log("req.user:", req.user);
+  const user = await Users.findById(req.user._id);
 
   res.status(200).json({
     success: true,
