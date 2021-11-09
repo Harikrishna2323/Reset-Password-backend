@@ -8,6 +8,6 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(cors({ origin: true }));
 
-app.use("/", authRouter);
+app.use("/api/v1", authRouter);
 
 module.exports = app;
