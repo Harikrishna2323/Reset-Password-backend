@@ -130,3 +130,45 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
     token,
   });
 });
+
+//get current user
+exports.getUserProfile = catchAsync(async (req, res, next) => {
+  const user = await Users.findById(req.user.id);
+
+  res.status(200).json({
+    success: true,
+    user,
+  });
+});
+
+//update current user
+exports.updateProfile = catchAsync(async (req, res, next) => {
+  const newUserData = {
+    name: req.body.name,
+    email: req.body.email,
+  };
+
+  const user = await Users.findByIdAndUpdate(req.user.id, newUserData, {
+    new: true,
+    runValidators: true,
+    useFindAndModify: false,
+  });
+
+  console.log(user);
+  res.status(200).json({
+    success: true,
+  });
+});
+
+//logout user
+exports.logoutUser = catchAsync(async (req, res, next) => {
+  res.cookie("token", null, {
+    expires: new Date(Date.now()),
+    httpOnly: true,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Logged out!",
+  });
+});
