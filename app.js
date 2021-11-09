@@ -6,9 +6,7 @@ const cors = require("cors");
 
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors());
-
-app.use();
+app.use(cors({ origin: true }));
 
 app.use("/", authRouter);
 
