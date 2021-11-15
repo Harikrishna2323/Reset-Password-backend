@@ -5,20 +5,28 @@ const jwt = require("jsonwebtoken");
 const sendEmail = require("../utils/email");
 const crypto = require("crypto");
 
-exports.register = catchAsync(async (req, res, next) => {
-  const { name, email, password } = req.body;
-  const user = await Users.create({
-    name,
-    email,
-    password,
-  });
+exports.register = async (req, res, next) => {
+  try {
+    const { name, email, password } = req.body;
+    const user = await Users.create({
+      name,
+      email,
+      password,
+    });
 
-  res.status(200).json({
-    success: true,
-    message: "User created successfully.",
-    user,
-  });
-});
+    res.status(200).json({
+      success: true,
+      message: "User created successfully.",
+      user,
+    });
+  } catch (error) {
+    console, log(error);
+    return res.status(400).json({
+      success: false,
+      message: "Error creating user. Please try again later.",
+    });
+  }
+};
 
 //login user
 exports.login = catchAsync(async (req, res, next) => {
