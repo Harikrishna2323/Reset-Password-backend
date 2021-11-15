@@ -4,6 +4,7 @@ const ErrorHandler = require("../utils/errorHandler");
 
 module.exports = async (req, res, next) => {
   try {
+    console.log(req.cookies);
     const { token } = req.cookies;
     if (!token) {
       next(new ErrorHandler("Login first to access this resource", 401));
