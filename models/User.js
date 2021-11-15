@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
+const validator = require("validator");
 const crypto = require("crypto");
 
 const userSchema = new mongoose.Schema({
@@ -16,6 +17,7 @@ const userSchema = new mongoose.Schema({
       /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
       "Please provide valid Email",
     ],
+    validate: [validator.isEmail, "Please enter valid email address."],
   },
   password: {
     type: String,

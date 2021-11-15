@@ -24,18 +24,29 @@ exports.register = catchAsync(async (req, res, next) => {
 exports.login = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
   if (!email || !password) {
-    return next(new ErrorHandler("Please provide email and password.", 400));
+    return res.status(400).json({
+      success: false,
+      message: "Plase provide email and password",
+    });
   }
   const user = await Users.findOne({ email }).select("+password");
 
   if (!user) {
-    return next(new ErrorHandler("Invalid email or password", 404));
+    return res.status(404).json({
+      success: false,
+      message: "Invalid email or password.",
+    });
   }
   const isMatchingPassword = await user.comparePassword(password);
   if (!isMatchingPassword) {
-    return next(new ErrorHandler("Invalid email or password", 404));
+    return res.status(404).json({
+      success: false,
+      message: "Invalid email or password.",
+    });
   }
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+
+  res.cookie("token", token, { httpOnly: true });
 
   res.status(200).json({
     success: true,
@@ -50,6 +61,7 @@ exports.protected = catchAsync(async (req, res, next) => {
   res.status(200).json({
     success: true,
     message: "You are authorized.",
+    user: req.user,
   });
 });
 
@@ -67,9 +79,7 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   await user.save({ validateBeforeSave: false });
 
   //send it to users email
-  const resetUrl = `${req.protocol}://${req.get(
-    "host"
-  )}/password/reset/${resetToken}`;
+  const resetUrl = `http://localhost:3000/password/reset/${resetToken}`;
 
   const message = `Forgot your password? Click here: \n ${resetUrl}\n\nIf you didnt, please ignore this mail.`;
 
@@ -134,8 +144,9 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
 
 //get current user
 exports.getUserProfile = catchAsync(async (req, res, next) => {
-  console.log("req.user:", req.user);
-  const user = await Users.findById(req.user._id);
+  // console.log("req.user:", req.user);
+
+  const user = await Users.findById(req.user.id);
 
   res.status(200).json({
     success: true,
@@ -145,6 +156,7 @@ exports.getUserProfile = catchAsync(async (req, res, next) => {
 
 //update current user
 exports.updateProfile = catchAsync(async (req, res, next) => {
+  // console.log("req.user:", req.user);
   const newUserData = {
     name: req.body.name,
     email: req.body.email,
@@ -156,14 +168,16 @@ exports.updateProfile = catchAsync(async (req, res, next) => {
     useFindAndModify: false,
   });
 
-  console.log(user);
+  // console.log("Modified user:", user);
   res.status(200).json({
     success: true,
+    user,
   });
 });
 
 //logout user
 exports.logoutUser = catchAsync(async (req, res, next) => {
+  req.user = undefined;
   res.cookie("token", null, {
     expires: new Date(Date.now()),
     httpOnly: true,

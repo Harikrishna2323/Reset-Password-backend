@@ -7,7 +7,7 @@ router.route("/register").post(authController.register);
 
 router.route("/login").post(authController.login);
 
-router.route("/logout").post(authController.logoutUser);
+router.route("/logout").get(authController.logoutUser);
 
 router.route("/protected").get(requireLogin, authController.protected);
 
