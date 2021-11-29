@@ -2,158 +2,115 @@ const catchAsync = require("../middlewares/catchAsync");
 const Users = require("../models/User");
 const ErrorHandler = require("../utils/errorHandler");
 const jwt = require("jsonwebtoken");
-const sendEmail = require("../utils/email");
+const sendEmail = require("../utils/sendEmail");
 const crypto = require("crypto");
+const sendToken = require("../utils/jwtToken");
 
-exports.register = async (req, res, next) => {
-  try {
-    const { name, email, password } = req.body;
-    const user = await Users.create({
-      name,
-      email,
-      password,
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "User created successfully.",
-      user,
-    });
-  } catch (error) {
-    console, log(error);
-    return res.status(400).json({
-      success: false,
-      message: "Error creating user. Please try again later.",
-    });
-  }
-};
+exports.registerUser = catchAsync(async (req, res, next) => {
+  const { name, email, password } = req.body;
+  console.log(req.body);
+  const user = await Users.create({
+    name,
+    email,
+    password,
+  });
+  sendToken(user, 201, res);
+});
 
 //login user
-exports.login = catchAsync(async (req, res, next) => {
+exports.loginUser = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
+
+  //checks if email and password is entered
   if (!email || !password) {
-    return res.status(400).json({
-      success: false,
-      message: "Plase provide email and password",
-    });
+    return next(new ErrorHandler("Please provide email and password", 400));
   }
   const user = await Users.findOne({ email }).select("+password");
 
   if (!user) {
-    return res.status(404).json({
-      success: false,
-      message: "Invalid email or password.",
-    });
+    return next(new ErrorHandler("Invalid email or password", 401));
   }
-  const isMatchingPassword = await user.comparePassword(password);
-  if (!isMatchingPassword) {
-    return res.status(404).json({
-      success: false,
-      message: "Invalid email or password.",
-    });
+
+  //cecks if password is correct
+  const isPasswordMatched = await user.comparePassword(password);
+  if (!isPasswordMatched) {
+    return next(new ErrorHandler("Invalid email or password", 401));
   }
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
 
-  res.cookie("token", token, { httpOnly: true });
-
-  res.status(200).json({
-    success: true,
-    message: "Log in Successful.",
-    user,
-    token,
-  });
+  sendToken(user, 200, res);
 });
 
-exports.protected = catchAsync(async (req, res, next) => {
-  console.log(req.user);
-  res.status(200).json({
-    success: true,
-    message: "You are authorized.",
-    user: req.user,
-  });
-});
-
-//forgot password
+//forgot password route => /api/v1/password/forgot
 exports.forgotPassword = catchAsync(async (req, res, next) => {
-  //find the user
+  console.log("Forgot password route");
   const user = await Users.findOne({ email: req.body.email });
+  console.log("user found");
 
   if (!user) {
-    return next(new ErrorHandler("There is no user with that email.", 404));
+    return next(new ErrorHandler("User not Found with this email.", 404));
   }
-
-  //generate token
-  const resetToken = user.createPasswordResetToken();
+  //get reset token
+  const restToken = user.getResetPasswordToken();
   await user.save({ validateBeforeSave: false });
 
-  //send it to users email
-  const resetUrl = `${process.env.FRONTEND_URL}/password/reset/${resetToken}`;
-
-  const message = `Forgot your password? Click here: \n ${resetUrl}\n\nIf you didnt, please ignore this mail.`;
+  //create reset password url
+  const resetUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/password/reset/${restToken}`;
+  const message = `Your password reset token is as follows:\n\n${resetUrl}\n\nIf you have not requested this email, please ignore it.`;
+  console.log(message);
 
   try {
     await sendEmail({
       email: user.email,
-      subject: "Your password reset (Valid for 10 mins).",
+      subject: "Password Recovery",
       message,
     });
-
     res.status(200).json({
       success: true,
-      message: "Email sent to mail.",
+      message: `Email send to ${user.email}`,
     });
-  } catch (error) {
-    user.createPasswordResetToken = undefined;
-    user.passwordResetExpires = undefined;
+  } catch (err) {
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
     await user.save({ validateBeforeSave: false });
-    return next(
-      new ErrorHandler("There was an error sending mail. Try again later.", 500)
-    );
+    return next(new ErrorHandler(err.message, 500));
   }
 });
 
-//reset password
+//to reset password => /api/v1/password/reset:token
 exports.resetPassword = catchAsync(async (req, res, next) => {
-  const { resetToken } = req.params;
-  //   console.log("resetToken: ", resetToken);
-  //get user based on token
-  const hashedToken = crypto
+  //hash url token
+  const resetPasswordToken = crypto
     .createHash("sha256")
-    .update(resetToken)
+    .update(req.params.token)
     .digest("hex");
 
   const user = await Users.findOne({
-    passwordResettoken: hashedToken,
-    passwordResetExpires: { $gt: Date.now() },
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() },
   });
-
-  //set new password , if token has not expired.
   if (!user) {
-    return next(new ErrorHandler("Token has expired or is invalid.", 400));
+    return next(
+      new ErrorHandler("Password reset token is Invalid or has expired.", 400)
+    );
   }
 
-  if (req.body.password !== req.body.passwordConfirm) {
-    return next(new ErrorHandler("Passwords do not match.", 400));
+  if (req.body.password != req.body.passwordConfirm) {
+    return next(new ErrorHandler("Password does not match.", 400));
   }
+
+  //setup new password
   user.password = req.body.password;
-  user.passwordConfirm = req.body.passwordConfirm;
-  user.passwordResetToken = undefined;
-  user.passwordResetExpires = undefined;
+  user.reetPasswordToken = undefined;
+  user.resetPasswordExpire = undefined;
   await user.save();
 
-  //log the user in
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-  res.status(200).json({
-    success: true,
-    message: "Password reset Successful.",
-    token,
-  });
+  sendToken(user, 200, res);
 });
 
-//get current user
+//get curently logged in details => /api/v1/me
 exports.getUserProfile = catchAsync(async (req, res, next) => {
-  // console.log("req.user:", req.user);
-
   const user = await Users.findById(req.user.id);
 
   res.status(200).json({
@@ -162,9 +119,25 @@ exports.getUserProfile = catchAsync(async (req, res, next) => {
   });
 });
 
-//update current user
+//Update password => /api/v1/password/update
+exports.updatePassword = catchAsync(async (req, res, next) => {
+  const user = await Users.findById(req.user.id).select("+password");
+  //check previous password
+
+  const isMatched = await user.comparePassword(req.body.oldPassword);
+
+  if (!isMatched) {
+    return next(new ErrorHandler("Old Password is incorect.", 400));
+  }
+
+  user.password = req.body.newPassword;
+  await user.save();
+
+  sendToken(user, 200, res);
+});
+
+//update User profile
 exports.updateProfile = catchAsync(async (req, res, next) => {
-  // console.log("req.user:", req.user);
   const newUserData = {
     name: req.body.name,
     email: req.body.email,
@@ -175,17 +148,16 @@ exports.updateProfile = catchAsync(async (req, res, next) => {
     runValidators: true,
     useFindAndModify: false,
   });
+  console.log(newUserData);
 
-  // console.log("Modified user:", user);
+  console.log(user);
   res.status(200).json({
     success: true,
-    user,
   });
 });
 
 //logout user
 exports.logoutUser = catchAsync(async (req, res, next) => {
-  req.user = undefined;
   res.cookie("token", null, {
     expires: new Date(Date.now()),
     httpOnly: true,
